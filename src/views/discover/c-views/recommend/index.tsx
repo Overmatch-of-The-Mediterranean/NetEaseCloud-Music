@@ -1,41 +1,52 @@
 import React, { memo, useEffect } from 'react'
 import type { FC, ReactNode } from 'react'
 
-// import { useAppSelector,useAppDispatch,shallowEqualApp } from '@/store'
-// import { changeName } from '@/store/modules/counter'
-import hyRequest from '@/service'
+import TopBanner from './c-cpns/top-banner'
+import HotRecommend from './c-cpns/hot-recommend'
+import { RecommendWrapper } from './style'
+import {  useAppDispatch } from '@/store'
+
+import { fetchRecommendDataAction,fetchTopRankingDataAction } from "./store/recommend";
+import NewAlbum from './c-cpns/new-album'
+import TopRanking from './c-cpns/top-ranking'
+import UserLogin from './c-cpns/user-login'
+import SettleSinger from './c-cpns/settle-singer'
+import HotAnchor from './c-cpns/hot-anchor'
+
 
 interface IProps {
  children?: ReactNode
 }
 
 const Recommend: FC<IProps> = () => {
-  // const { counter,name } = useAppSelector((state) => ({
-  //   counter: state.counter.counter,
-  //   name: state.counter.name
-  // }),shallowEqualApp)
+
+
+  const dispatch = useAppDispatch()
 
   useEffect(() => {
-    hyRequest.get({
-      url:'/banner'
-    }).then(res => {
-      console.log(res);
-    })
-  },[])
-
-  // const dispatch = useAppDispatch()
-
-  // function handleChangeName(){
-  //   dispatch(changeName('哈哈哈哈'))
-  // }
+    dispatch(fetchRecommendDataAction())
+    dispatch(fetchTopRankingDataAction())
+   },[])
 
 
   return (
-    <div>
-      {/* <div>计数器：{counter}</div>
-      <div>姓名：{name}</div>
-      <button onClick={handleChangeName}>修改姓名</button> */}
-    </div>
+    <RecommendWrapper>
+      <TopBanner />
+      <div className="content wrap-v2">
+        <div className="left">
+          <HotRecommend />
+          <NewAlbum />
+          <TopRanking />
+        </div>
+        <div className="right">
+          <UserLogin />
+          <SettleSinger />
+          <HotAnchor/>
+        </div>
+      </div>
+
+
+    </RecommendWrapper>
   )
 }
 
