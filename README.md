@@ -1,6 +1,6 @@
 # 网易云项目
 
-## 要点
+## 一.要点
 
  1. 二级路由使用懒加载，要在占位<Outlet/>的外层使用Suspense包裹，可以免除整体闪现的效果
 
@@ -244,11 +244,7 @@ export const fetchSongDetailDataAction = createAsyncThunk<void, number,IThunkTyp
 
 
 
-
-
-
-
-## 音乐播放功能(最复杂的部分)
+## 二.音乐播放功能(最复杂的部分)
 
 定义的状态变量
 
