@@ -222,3 +222,324 @@ export const shallowEqualApp = shallowEqual
 
 
 7.跳转和超链接如何区分
+
+
+
+8.createAsyncThunk可传入泛型
+
+```typescript
+// 第一个泛型参数代表createAsyncThunk函数返回值的类型
+// 第二个泛型参数代表调用fetchSongDetailDataAction传入参数的类型，如，下面的id
+// 第三个泛型参数代表getState函数返回state的类型
+export const fetchSongDetailDataAction = createAsyncThunk<void, number,IThunkType>('songDetail', (id, { dispatch,getState }) => {}
+                                                                ..
+
+```
+
+
+
+
+
+## 音乐播放功能(最复杂的部分)
+
+定义的状态变量
+
+```typescript
+  const [isPlaying, setIsPlaying] = useState(false) 	// 控制歌曲的播放与暂停
+  const [duration, setDuration] = useState(0)			// 存储音乐的总时间
+  const [progress, setProgress] = useState(0)			// 存储进度条的实时数值
+  const [currentTime, setCurrentTime] = useState(0) 	// 存储当前播放时间
+  const [ isSliding, setIsSliding ] = useState(false) 	// 是否拖动的状态控制
+```
+
+
+
+player从redux中获取的数据
+
+```typescript
+const { currentSong = [], lyrics = [], lyricIndex,playMode } = useAppSelector((state) => ({
+  currentSong: state.player.currentSong,
+  lyrics: state.player.lyrics,
+  lyricIndex: state.player.lyricIndex,
+  playMode:state.player.playMode
+}),shallowEqualApp)
+```
+
+
+
+
+
+1.初始化播放音乐
+
+```tsx
+// tsx中使用audio标签
+<audio ref={audioRef} onTimeUpdate={ handleTimeUpdate } onEnded={ handleTimeEnd }/>
+
+// 逻辑处理
+// 1.首先获取audio元素
+const audioRef = useRef<HTMLAudioElement>(null)
+
+// 2.获取redux中存储的正在播放音乐的数据
+const { currentSong = [] } = useAppSelector((state) => ({
+    currentSong: state.player.currentSong,
+   }),shallowEqualApp)
+
+// 3.然后进行首次渲染播放的操作
+
+useEffect(() => {
+    // 通过封装的工具函数获取歌曲MP3的播放地址
+    audioRef.current!.src = getSongPlayUrl(currentSong.id)
+    // 通过audio元素提供的API来实现歌曲的播放
+    audioRef.current
+      ?.play()
+      .then(() => {
+          setIsPlaying(true)
+        console.log('播放成功');
+
+        })
+      .catch(() => {
+          setIsPlaying(false)
+          console.log('播放失败')
+
+      })
+
+    setDuration(currentSong.dt)
+   },[currentSong])
+
+```
+
+
+
+2.音乐的播放与暂停
+
+```typescript
+  function handlePlayBtnClick() {
+    isPlaying
+      ? audioRef.current?.pause()
+      : audioRef.current?.play().catch(() => setIsPlaying(false))
+
+    setIsPlaying(!isPlaying)
+  }
+```
+
+
+
+3.歌曲播放进度与歌词的对应
+
+```tsx
+// 歌曲在播放过程中，会实时调用onTimeUpdate的回调函数。
+ <audio ref={audioRef} onTimeUpdate={ handleTimeUpdate } onEnded={ handleTimeEnd }/>
+
+
+function handleTimeUpdate() {
+    const currentTime = audioRef!.current!.currentTime * 1000
+
+	// 通过 isSliding状态来控制拖拽时，进度条不跳跃的逻辑
+    if (!isSliding) {
+      const progress = (currentTime / duration) * 100
+      setProgress(progress) // 进度条
+      setCurrentTime(currentTime) // 现在播放时间
+    }
+	
+    // 不同时间歌词匹配算法
+    let index:number = lyrics.length - 1
+    for (let i = 0; i < lyrics.length; i++) {
+      /* eslint-disabled */
+      const lyric:ILyric = lyrics[i]
+      if (lyric.time > currentTime) {
+        index = i - 1
+        break
+      }
+    }
+    if (lyricIndex === index || index === -1) return
+    dispatch(changeLyricIndexAction(index))
+
+    // 歌词显示组件
+     message.open({
+      content: lyrics[index].text,
+      key: 'lyric',
+      duration: 0
+    })
+  }
+```
+
+
+
+4.歌曲播放过程中点击与拖拽进度条的处理
+
+```tsx
+// 使用antd中的进度条组件
+ <Slider
+ 	step={0.5}
+ 	value={progress}
+ 	tooltip={{ formatter: null }}
+ 	onChange={handleSliderChanging}
+ 	onAfterChange={handleSliderChanged}
+/>
+
+// 拖动逻辑进度条该表逻辑
+function handleSliderChanging(value: number) {
+  	setIsSliding(true)
+  	setProgress(value	
+                
+  	const currentTime = (value / 100) * duration
+  	setCurrentTime(currentTime)
+
+}
+
+// 点击与拖动进度条结束后，音乐实时播放的逻辑
+function handleSliderChanged(value: number) {
+   const currentTime = (value / 100) * duration
+   
+   audioRef!.current!.currentTime = currentTime / 1000
+    
+   setProgress(value)
+   setCurrentTime(currentTime)
+    setIsSliding(false)
+}
+```
+
+
+
+5.在redux中存放歌曲相关数据和歌词解析的处理，以及添加榜单中的歌曲至播放列表
+
+```typescript
+  // 添加榜单中的歌曲至播放列表
+function handleRankingPlay(id:number) {
+  dispatch(fetchSongDetailDataAction(id))
+}
+
+
+export const fetchSongDetailDataAction = createAsyncThunk<void, number,IThunkType>('songDetail', (id, { dispatch,getState }) => {
+
+  /**
+   * 两种情况
+   * 1.歌曲不在播放列表
+   * 2.歌曲已在播放列表
+   */
+  const playSongList = getState().player.playSongList
+  const findIndex = playSongList.findIndex(item => item.id === id)
+  if (findIndex === -1) {
+
+    getSongDetail(id).then(res => {
+      if (!res.songs.length) return
+      const newPlaySongList = [...playSongList, res.songs[0]]
+
+      dispatch(changeCurrentSongAction(res.songs[0]))
+      dispatch(changePlaySongListAction(newPlaySongList))
+      dispatch(changePlaySongIndexAction(findIndex))
+    })
+  } else {
+    const song = playSongList[findIndex]
+    dispatch(changeCurrentSongAction(song))
+    dispatch(changePlaySongIndexAction(findIndex))
+   }
+
+
+
+  getSongLyric(id).then(res => {
+    // 1.获取歌词的字符串
+    const lyricString = res.lrc.lyric
+    // 2.对歌词进行解析(一个个对象的数组)，parseLyric函数是封装的一个歌词解析工具
+    const lyrics = parseLyric(lyricString)
+    // 3.将歌词放到state中
+    dispatch(changeLyricsAction(lyrics))
+   })
+})
+```
+
+
+
+6.不同播放模式下，切换歌曲的处理
+
+```typescript
+// playMode 0代表顺序播放，1代表随机播放，2代表单曲循环
+
+
+/**
+ * 不同模式下歌曲切换逻辑
+*/
+function handleChangeMusic(isNext:boolean) {
+    dispatch(changeMusicAction(isNext))
+}
+
+
+export const changeMusicAction = createAsyncThunk<void, boolean, IThunkType>('changeMusic', (isNext: boolean, { dispatch, getState }) => {
+
+  const state = getState()
+  const songIndex = state.player.playSongIndex
+  const songList = state.player.playSongList
+  const playMode = state.player.playMode
+
+  let newIndex = songIndex
+  // 随机播放切换时的处理
+  if (playMode === 1) {
+    let newIndexCopy = Math.floor(Math.random() * songList.length)
+    // 随机切换不同歌
+    while (newIndex === newIndexCopy) {
+      newIndexCopy = Math.floor(Math.random() * songList.length)
+    }
+    newIndex = newIndexCopy
+    dispatch(changeCurrentSongAction(songList[newIndex]))
+    dispatch(changePlaySongIndexAction(newIndex))
+    getSongLyric(songList[newIndex].id).then(res => {
+    // 1.获取歌词的字符串
+    const lyricString = res.lrc.lyric
+    // 2.对歌词进行解析(一个个对象的数组)
+    const lyrics = parseLyric(lyricString)
+    // 3.将歌词放到state中
+    dispatch(changeLyricsAction(lyrics))
+   })
+  } else {
+    newIndex = isNext ? newIndex + 1 : newIndex - 1
+    if (newIndex > songList.length - 1) newIndex = 0
+    if (newIndex < 0)  newIndex = songList.length - 1
+    dispatch(changeCurrentSongAction(songList[newIndex]))
+    dispatch(changePlaySongIndexAction(newIndex))
+    getSongLyric(songList[newIndex].id).then(res => {
+    // 1.获取歌词的字符串
+    const lyricString = res.lrc.lyric
+    // 2.对歌词进行解析(一个个对象的数组)
+    const lyrics = parseLyric(lyricString)
+    // 3.将歌词放到state中
+    dispatch(changeLyricsAction(lyrics))
+   })
+  }
+})
+```
+
+
+
+7.歌曲播放完后的自动处理
+
+```typescript
+<audio ref={audioRef} onTimeUpdate={ handleTimeUpdate } onEnded={ handleTimeEnd }/>
+    
+/**
+  * 歌曲播放完后的自动处理
+  */
+function handleTimeEnd() {
+  if (playMode === 2) {
+    audioRef.current!.currentTime = 0
+    audioRef.current?.play()
+  } else {
+    handleChangeMusic(true)
+   }
+}
+```
+
+
+
+8.切换播放模式处理
+
+```typescript
+  /**
+   * 切换播放模式处理
+   */
+  function handleChangeLoop() {
+    let newPlayMode = playMode + 1
+    if (newPlayMode > 2) newPlayMode = 0
+    dispatch(changePlayModeAction(newPlayMode))
+  }
+```
+
